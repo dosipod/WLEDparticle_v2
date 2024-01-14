@@ -27,6 +27,7 @@
 #include "wled.h"
 #include "FX.h"
 #include "fcn_declare.h"
+#include "FXparticleSystem.h"
 
 #define IBN 5100
 
@@ -7659,6 +7660,327 @@ uint16_t mode_2Dwavingcell() {
 static const char _data_FX_MODE_2DWAVINGCELL[] PROGMEM = "Waving Cell@!,,Amplitude 1,Amplitude 2,Amplitude 3;;!;2";
 
 
+/*
+ * Particle gravity spray
+ * Particles are sprayed from below, spray moves back and forth
+ * Uses palette for particle color
+ * by DedeHai (Damian Schneider)
+ */
+
+
+uint16_t mode_particlespray(void)
+{
+ 
+ if (SEGLEN == 1) return mode_static();
+
+  const uint16_t cols = strip.isMatrix ? SEGMENT.virtualWidth() : 1;
+  const uint16_t rows = strip.isMatrix ? SEGMENT.virtualHeight() : SEGMENT.virtualLength();
+
+  const uint16_t numParticles = 250;
+  const uint8_t numSprays = 1;
+  uint8_t percycle = numSprays; //maximum number of particles emitted per cycle
+
+  //test, use static particles
+
+  static PSparticle* particles;
+  static PSpointsource* spray;
+
+  uint8_t i =0;
+  uint8_t j =0;
+  
+
+  if (SEGMENT.call == 0) //initialization
+  {
+    //allocate memory and divide it into proper pointers
+    uint16_t dataSize = sizeof(PSparticle) * numParticles;
+    dataSize += sizeof(PSpointsource) * (numSprays+1); //+1 to avoid crashes due to memory alignment, makes sure there is a little more memory allocated than needed
+    if (!SEGENV.allocateData(dataSize)) return mode_static(); //allocation failed; //allocation failed
+
+  //  Serial.print(F("particle datasize = "));
+   // Serial.println(dataSize);
+    spray = reinterpret_cast<PSpointsource*>(SEGENV.data);    
+    //calculate the end of the spray data and assign it as the data pointer for the particles:
+    particles = reinterpret_cast<PSparticle*>(spray+numSprays); //cast the data array into a particle pointer
+    
+    for(i=0; i<numParticles; i++)
+    {
+      particles[i].ttl=0;
+    }
+
+    for(i=0; i<numSprays; i++)
+    {
+      spray[i].source.hue = random8();
+      spray[i].source.x = 4*PS_P_RADIUS*(i+1);
+      spray[i].source.y = -2*PS_P_RADIUS;
+      spray[i].source.vx = 10;
+      spray[i].maxLife = 300;
+      spray[i].minLife = 30;
+      spray[i].vx = 0; //emitting speed
+      spray[i].vy = 20; //emitting speed
+      //spray.var = 10 + (random8() % 4);
+    }
+    //SEGMENT.palette = 35; //fire palette
+  }
+
+  //change source emitting color from time to time
+  if(SEGMENT.call % (11-(SEGMENT.intensity/25)) == 0) //every nth frame, cycle color and emit particles
+  {
+    for(i=0; i<numSprays; i++)
+    {
+      spray[i].source.hue++;// = random8(); //change hue of spray source
+    }
+
+    for(i=0; i<numSprays; i++)
+      {        
+        //percycle = 1+(SEGMENT.intensity>>4); //how many particles are sprayed per cycle and how fast ist the color changing
+        if(spray[i].source.vx > 0) //moving to the right currently
+        {
+          spray[i].source.vx = SEGMENT.speed>>4; //spray speed
+        }
+        else
+        {
+          spray[i].source.vx = -(SEGMENT.speed>>4); //spray speed (is currently moving negative so keep it negative)
+        }        
+        spray[i].vy = SEGMENT.custom1>>3; //emitting speed, upward
+        spray[i].vx = ((int16_t)SEGMENT.custom2-(int16_t)127)/8; //emitting speed, left/right (=angle)
+        spray[i].var = SEGMENT.custom3+1; //emiting variation = nozzle size  (custom 3 goes from 0-32)
+        spray[i].source.ttl = 255; //source never dies, replenish its lifespan
+      }
+
+    i = 0;
+    j = 0;
+    while(i<numParticles)
+    {
+      if(particles[i].ttl==0) //find a dead particle
+        {
+          //ColorFromPalette(SEGPALETTE, random8() , 255, LINEARBLEND);
+          //spray[j].source.hue = random8(); //set random color for each particle (using palette)
+          Emitter_Fountain_emit(&spray[j], &particles[i]);
+          j = (j+1)%numSprays;
+          if(percycle-- == 0)
+          {
+            break; //quit loop if all particles of this round emitted
+          }
+        }
+        i++;
+    }
+  }
+  
+
+    for(i=0; i<numSprays; i++)
+    {     
+       Particle_Bounce_update(&spray[i].source); //move the source
+    }
+
+    
+    for(i=0; i<numParticles; i++)
+    {
+    	//Particle_Move_update(&particles[i]); //move the particles
+      Particle_Gravity_update(&particles[i], 1);
+    }
+
+    SEGMENT.fill(BLACK); //clear the matrix
+
+    //render the particles
+    ParticleSys_render(particles, numParticles);
+    //CRGB c = PURPLE;
+    //SEGMENT.setPixelColorXY(0, 0, c);
+
+    return FRAMETIME; 
+}
+static const char _data_FX_MODE_PARTICLESPRAY[] PROGMEM = "Particle Spray@Moving Speed,Intensity,Particle Speed, Spray Angle, Nozzle Size, check1, check2, check3;!,!;012;pal=35,sx=100,ix=200,c1=190,c2=128,c3=8,o1=1,o2=0,o3=1";
+
+//good default values for sliders: 100,200,190, 45
+
+//static const char _data_FX_MODE_PARTICLESPRAY[] PROGMEM = "Particle Spray@Moving Speed, Intensity, Particle Speed, Nozzle Size;!,!;!;2;pal=35, ix=20,si=20";
+/*syntax for json configuration string:
+@A,B,C,D,E,F,G,H;I,J,K;L;M;N mark commas and semicolons
+A - speed
+B - intensity
+C, D, E, - custom1 to custom3
+F,G,H - check1 to check3
+I,J,K - slot1 to slot3
+L - palette
+M - mode (012)
+N - parameter defaults (sliders: sx=100 ist speed, ix=24 is intensity, c1 ... c3 =20 is custom 1...3)
+
+a '!' uses default values for that section
+*/
+
+
+/*
+ * Particle Fire
+ * realistic fire effect using particles, heat and perlinnoise wind
+ * by DedeHai (Damian Schneider)
+ */
+
+uint16_t mode_particlefire(void)
+{
+ if (SEGLEN == 1) return mode_static();
+
+  const uint16_t cols = strip.isMatrix ? SEGMENT.virtualWidth() : 1;
+  const uint16_t rows = strip.isMatrix ? SEGMENT.virtualHeight() : SEGMENT.virtualLength();
+
+  //particle system box dimensions
+  const uint16_t PS_MAX_X (cols*PS_P_RADIUS-1); 
+  const uint16_t PS_MAX_Y (rows*PS_P_RADIUS-1); 
+
+  const uint16_t numParticles = 550;
+  const uint8_t numFlames = (cols-2)<<1; //number of flames: depends on fire width. for a fire width of 16 pixels total, about 25-30 flames give good results 
+  uint8_t percycle = numFlames/2; //maximum number of particles emitted per cycle
+  uint16_t i;
+/*
+#ifdef FIRELAMP
+	uint16_t numParticles = 300; //number of particles to use
+	uint8_t perCycle = 15;
+#else
+uint16_t numParticles = 300; //number of particles to use
+uint8_t perCycle = 12; //NUMBEROFFLAMES; //max number of emitted particles per cycle, use to fine tune the appearance, more means brighter flames but they can oscillate
+#endif
+*/
+
+  static PSsimpleparticle* simpleparticles;
+  static PSpointsource* flames;
+
+  if (SEGMENT.call == 0) //initialization
+  {
+    DEBUG_PRINTLN(F("Initializing Particle Fire"));
+    //allocate memory and divide it into proper pointers
+    uint16_t dataSize = sizeof(PSsimpleparticle) * numParticles;
+    dataSize += sizeof(PSpointsource) * (numFlames+1); //+1 to avoid crashes due to memory alignment, makes sure there is a little more memory allocated than needed (TODO: need to find out why it really crashes)
+    
+    DEBUG_PRINTLN(F("**********************"));
+    DEBUG_PRINT(F("particle datasize = "));
+    DEBUG_PRINTLN(dataSize);
+
+    if (!SEGENV.allocateData(dataSize)){    
+      return mode_static(); //allocation failed; //allocation failed
+    } 
+    
+    flames = reinterpret_cast<PSpointsource*>(SEGENV.data);    
+    //calculate the end of the spray data and assign it as the data pointer for the particles:
+    simpleparticles = reinterpret_cast<PSsimpleparticle*>(flames+numFlames); //cast the data array into a particle pointer
+    
+    //make sure all particles start out dead
+		for (i = 0; i < numParticles; i++) {
+				simpleparticles[i].ttl = 0;
+		}
+
+    //initialize the flame sprays
+#ifdef FIRELAMP
+			for (i = 0; i < numFlames; i++) {
+				flames[i].source.ttl = 0;
+				flames[i].source.x = PS_MAX_Y / 2 + (rand() % (PS_P_RADIUS * 6))	- PS_P_RADIUS * 3; //position araound the center				
+			}
+#else
+		for (i = 0; i < numFlames; i++) {
+			flames[i].source.ttl = 0;
+			flames[i].source.x = PS_MAX_X / 2 + (rand() % (PS_P_RADIUS * 8)) - PS_P_RADIUS * 4; //position araound the center TODO: make this dynamic depending on matrix size
+      //other parameters are set when creating the flame (see blow)
+		}
+#endif
+	}
+
+  //update the flame sprays:
+	for (i = 0; i < numFlames; i++) {
+		if (flames[i].source.ttl > 0) {
+			flames[i].source.ttl--;
+			flames[i].source.x += flames[i].source.vx; //move the source (if it has x-speed)
+		} 
+    else //flame source is dead
+		{
+
+#ifdef FIRELAMP
+//make some of the flames small and slow to add a bright base
+			if(i<numFlames-4)
+			{
+				//normal fire flames
+
+				 flames[i].source.y = -1 * PS_P_RADIUS; //set the source below the frame
+				 flames[i].source.vy = 0;
+				 flames[i].source.vx =  random8(4) - 2; //emitter moving speed;
+				 //flames[i].source.hue = 0;//(rand() % 15) + 18; //flame color, orange to yellow (not used)
+				 flames[i].source.ttl = random8(25) + 15; //lifetime of one flame
+				 flames[i].maxLife = random8(130) + 30; //defines flame height together with the vy speed, vy speed*maxlife/PS_P_RADIUS is the average flame height
+				 flames[i].minLife = 20;
+				 flames[i].vx = random8(4) - 2; //emitting speed, horizontal direction
+				 flames[i].vy = 8; //emitting speed (upwards)
+				 flames[i].var = random8(5) + 5; //speed variation around vx,vy (+/- var/2)
+
+			}
+			else
+			{
+				//base flames
+				flames[i].source.y= -1 * PS_P_RADIUS; //set the source below the frame
+				flames[i].source.vy = 0;
+				flames[i].source.vx = 0; //emitter moving speed;
+				//flames[i].source.hue = 0; //(rand() % 15) + 18; //flame color, orange to yellow (not used)
+				flames[i].source.ttl = random8(25) + 15; //lifetime of one flame
+				flames[i].maxLife = 120; //defines flame height together with the vy speed, vy speed*maxlife/PS_P_RADIUS is the average flame height
+				flames[i].minLife = 50;
+				flames[i].vx = 0; //emitting speed, horizontal direction
+				flames[i].vy = 2; //emitting speed (upwards)
+				flames[i].var = 1; //speed variation around vx,vy (+/- var/2)
+			}
+#else
+		//initialize new flame: set properties of source
+		//from time to time, chang the flame position
+		if (random8(40) == 0) {
+			flames[i].source.x = PS_P_RADIUS*3 + rand()%(PS_MAX_X-(PS_P_RADIUS*6)); //distribute randomly but not close to the corners 
+		}
+		flames[i].source.y = -1 * PS_P_RADIUS; //set the source below the frame so particles alredy spread a little when the appear
+		flames[i].source.vx = 0; // (rand() % 3) - 1;
+		flames[i].source.vy = 0;
+		//flames[i].source.hue = random8(15) + 18; //flame color, orange to yellow
+		flames[i].source.ttl = random8(SEGMENT.intensity>>2)/(1+(SEGMENT.speed>>6)) + 10; //'hotness' of fire, faster flames reduce the effect or flame height will scale too much with speed
+		flames[i].maxLife = random8(7) + 13; //defines flame height together with the vy speed, vy speed*maxlife/PS_P_RADIUS is the average flame height
+		flames[i].minLife = 2;
+		flames[i].vx = (int8_t)random8(4) - 2; //emitting speed (sideways)
+		flames[i].vy = 5+(SEGMENT.speed>>2); //emitting speed (upwards)
+		flames[i].var = random8(5) + 3; //speed variation around vx,vy (+/- var/2)
+#endif
+		}
+	}
+
+  static uint16_t windposition = 0; //position in the perlin noise matrix for wind generation
+  //if (rand() % 5 == 0) //change wind speed sometimes
+    {
+      windposition += 4;
+    }
+
+    //update particles, create particles
+	uint8_t j = random8(numFlames); //start with a random flame (so each flame gets the chance to emit a particle if perCycle is smaller than number of flames)
+	for (i = 0; i < numParticles; i++) {
+		if (simpleparticles[i].ttl == 0 && percycle > 0) {
+			Emitter_Flame_emit(&flames[j], &simpleparticles[i]);
+			j++;
+			percycle--;
+			if (j >= numFlames) {
+				j = 0;
+			}
+		} 
+    else if (simpleparticles[i].ttl) { //if particle is alive, update it
+		  //add wind, using perlin noise
+		  int8_t windspeed = (int8_t) (inoise8(windposition, simpleparticles[i].y >> 2) - 127) / ((271-SEGMENT.custom1)>>4);
+		  simpleparticles[i].vx = windspeed;
+			SimpleParticle_update(&simpleparticles[i],false,false); //update particle, no wrapping
+		}
+	}
+
+  SEGMENT.fill(BLACK); //clear the matrix
+
+  //render the particles
+  ParticleSys_renderParticleFire(simpleparticles, numParticles); //draw matrix
+
+  return FRAMETIME; 
+
+}
+static const char _data_FX_MODE_PARTICLEFIRE[] PROGMEM = "Particle Fire@Speed,Intensity,Wind Speed, Color Mode, check1, check2, check3;!,!;012;sx=100,ix=120,c1=128,c2=0,c3=8,o1=1,o2=0,o3=1";
+//static const char _data_FX_MODE_PARTICLEFIRE[] PROGMEM = "Particle Fire@Speed,Intensity,Wind Speed, asdf,Color Mode,check1, check2, check3;!,!;2;sx=88,ix=70,c1=190,c2=128,c3=8,o1=1,o2=0,o3=1";
+
+
+
+
 #endif // WLED_DISABLE_2D
 
 
@@ -7898,6 +8220,8 @@ void WS2812FX::setupEffectData() {
   addEffect(FX_MODE_2DWAVINGCELL, &mode_2Dwavingcell, _data_FX_MODE_2DWAVINGCELL);
 
   addEffect(FX_MODE_2DAKEMI, &mode_2DAkemi, _data_FX_MODE_2DAKEMI); // audio
+  addEffect(FX_MODE_PARTICLESPRAY, &mode_particlespray, _data_FX_MODE_PARTICLESPRAY);
+  addEffect(FX_MODE_PARTICLEFIRE, &mode_particlefire, _data_FX_MODE_PARTICLEFIRE);
 #endif // WLED_DISABLE_2D
 
 }

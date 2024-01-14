@@ -148,7 +148,7 @@ bool Segment::allocateData(size_t len) {
     if (call == 0) memset(data, 0, len);  // erase buffer if called during effect initialisation
     return true;
   }
-  //DEBUG_PRINTF("--   Allocating data (%d): %p\n", len, this);
+  DEBUG_PRINTF("--   Allocating data (%d): %p\n", len, this);
   deallocateData();
   if (len == 0) return false; // nothing to do
   if (Segment::getUsedSegmentData() + len > MAX_SEGMENT_DATA) {
@@ -161,7 +161,7 @@ bool Segment::allocateData(size_t len) {
   data = (byte*) malloc(len);
   if (!data) { DEBUG_PRINTLN(F("!!! Allocation failed. !!!")); return false; } //allocation failed
   Segment::addUsedSegmentData(len);
-  //DEBUG_PRINTF("---  Allocated data (%p): %d/%d -> %p\n", this, len, Segment::getUsedSegmentData(), data);
+  DEBUG_PRINTF("---  Allocated data (%p): %d/%d -> %p\n", this, len, Segment::getUsedSegmentData(), data);
   _dataLen = len;
   memset(data, 0, len);
   return true;
