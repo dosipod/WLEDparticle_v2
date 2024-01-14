@@ -7680,10 +7680,20 @@ uint16_t mode_particlespray(void)
   const uint8_t numSprays = 1;
   uint8_t percycle = numSprays; //maximum number of particles emitted per cycle
 
-  //test, use static particles
+  PSparticle* particles;
+  PSpointsource* spray;
 
-  static PSparticle* particles;
-  static PSpointsource* spray;
+  //allocate memory and divide it into proper pointers
+  uint16_t dataSize = sizeof(PSparticle) * numParticles;
+  dataSize += sizeof(PSpointsource) * (numSprays+1); //+1 to avoid crashes due to memory alignment, makes sure there is a little more memory allocated than needed
+  if (!SEGENV.allocateData(dataSize)) return mode_static(); //allocation failed; //allocation failed
+
+  // Serial.print(F("particle datasize = "));
+  // Serial.println(dataSize);
+  spray = reinterpret_cast<PSpointsource*>(SEGENV.data);    
+  //calculate the end of the spray data and assign it as the data pointer for the particles:
+  particles = reinterpret_cast<PSparticle*>(spray+numSprays); //cast the data array into a particle pointer
+
 
   uint8_t i =0;
   uint8_t j =0;
@@ -7691,17 +7701,6 @@ uint16_t mode_particlespray(void)
 
   if (SEGMENT.call == 0) //initialization
   {
-    //allocate memory and divide it into proper pointers
-    uint16_t dataSize = sizeof(PSparticle) * numParticles;
-    dataSize += sizeof(PSpointsource) * (numSprays+1); //+1 to avoid crashes due to memory alignment, makes sure there is a little more memory allocated than needed
-    if (!SEGENV.allocateData(dataSize)) return mode_static(); //allocation failed; //allocation failed
-
-  //  Serial.print(F("particle datasize = "));
-   // Serial.println(dataSize);
-    spray = reinterpret_cast<PSpointsource*>(SEGENV.data);    
-    //calculate the end of the spray data and assign it as the data pointer for the particles:
-    particles = reinterpret_cast<PSparticle*>(spray+numSprays); //cast the data array into a particle pointer
-    
     for(i=0; i<numParticles; i++)
     {
       particles[i].ttl=0;
@@ -7776,7 +7775,7 @@ uint16_t mode_particlespray(void)
     for(i=0; i<numParticles; i++)
     {
     	//Particle_Move_update(&particles[i]); //move the particles
-      Particle_Gravity_update(&particles[i], 1);
+      Particle_Gravity_update(&particles[i], SEGMENT.check1);
     }
 
     SEGMENT.fill(BLACK); //clear the matrix
@@ -7788,7 +7787,7 @@ uint16_t mode_particlespray(void)
 
     return FRAMETIME; 
 }
-static const char _data_FX_MODE_PARTICLESPRAY[] PROGMEM = "Particle Spray@Moving Speed,Intensity,Particle Speed, Spray Angle, Nozzle Size, check1, check2, check3;!,!;012;pal=35,sx=100,ix=200,c1=190,c2=128,c3=8,o1=1,o2=0,o3=1";
+static const char _data_FX_MODE_PARTICLESPRAY[] PROGMEM = "Particle Spray@Moving Speed,Intensity,Particle Speed, Spray Angle, Nozzle Size, Wraparound X, check2, check3;!,!;012;pal=35,sx=100,ix=200,c1=190,c2=128,c3=8,o1=1,o2=0,o3=1";
 
 //good default values for sliders: 100,200,190, 45
 
@@ -7839,19 +7838,16 @@ uint8_t perCycle = 12; //NUMBEROFFLAMES; //max number of emitted particles per c
 #endif
 */
 
-  static PSsimpleparticle* simpleparticles;
-  static PSpointsource* flames;
+  PSsimpleparticle* simpleparticles;
+  PSpointsource* flames;
 
-  if (SEGMENT.call == 0) //initialization
-  {
-    DEBUG_PRINTLN(F("Initializing Particle Fire"));
-    //allocate memory and divide it into proper pointers
+  //allocate memory and divide it into proper pointers
     uint16_t dataSize = sizeof(PSsimpleparticle) * numParticles;
     dataSize += sizeof(PSpointsource) * (numFlames+1); //+1 to avoid crashes due to memory alignment, makes sure there is a little more memory allocated than needed (TODO: need to find out why it really crashes)
     
-    DEBUG_PRINTLN(F("**********************"));
-    DEBUG_PRINT(F("particle datasize = "));
-    DEBUG_PRINTLN(dataSize);
+    //DEBUG_PRINTLN(F("**********************"));
+    //DEBUG_PRINT(F("particle datasize = "));
+    //DEBUG_PRINTLN(dataSize);
 
     if (!SEGENV.allocateData(dataSize)){    
       return mode_static(); //allocation failed; //allocation failed
@@ -7860,7 +7856,10 @@ uint8_t perCycle = 12; //NUMBEROFFLAMES; //max number of emitted particles per c
     flames = reinterpret_cast<PSpointsource*>(SEGENV.data);    
     //calculate the end of the spray data and assign it as the data pointer for the particles:
     simpleparticles = reinterpret_cast<PSsimpleparticle*>(flames+numFlames); //cast the data array into a particle pointer
-    
+
+  if (SEGMENT.call == 0) //initialization
+  {
+    DEBUG_PRINTLN(F("Initializing Particle Fire"));
     //make sure all particles start out dead
 		for (i = 0; i < numParticles; i++) {
 				simpleparticles[i].ttl = 0;
