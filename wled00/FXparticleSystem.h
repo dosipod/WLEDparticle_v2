@@ -64,7 +64,7 @@ typedef struct {
 	uint16_t minLife; //minimum ttl of emittet particles
 	uint16_t maxLife; //maximum ttl of emitted particles
     PSparticle source; //use a particle as the emitter source (speed, position, color)
-    int8_t var; //variation of emitted speed
+    uint8_t var; //variation of emitted speed
     int8_t vx; //emitting speed
     int8_t vy; //emitting speed
 } PSpointsource;
@@ -83,7 +83,7 @@ void Emitter_Flame_emit(PSpointsource *emitter, PSsimpleparticle *part);
 void Emitter_Fountain_emit(PSpointsource *emitter, PSparticle *part);
 void Particle_Move_update(PSparticle *part);
 void Particle_Bounce_update(PSparticle *part);
-void Particle_Gravity_update(PSparticle *part, bool wrapX);
+void Particle_Gravity_update(PSparticle *part, bool wrapX, bool bounceX, bool bounceY);
 void ParticleSys_render(PSparticle *particles, uint16_t numParticles);
 void SimpleParticle_update(PSsimpleparticle *part, bool wrapX, bool WrapY);
 void ParticleSys_renderParticleFire(PSsimpleparticle *particles, uint16_t numParticles);

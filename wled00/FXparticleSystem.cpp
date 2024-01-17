@@ -33,25 +33,22 @@
 
 //Fountain style emitter for simple particles used for flames (particle TTL depends on source TTL)
 void Emitter_Flame_emit(PSpointsource *emitter, PSsimpleparticle *part) {
-	part->x = emitter->source.x + (rand() % emitter->var) - ((emitter->var) >> 1);
-	part->y = emitter->source.y + (rand() % emitter->var) - ((emitter->var) >> 1);
-	part->vx = emitter->vx + (rand() % emitter->var) - ((emitter->var) >> 1);
-	part->vy = emitter->vy + (rand() % emitter->var) - ((emitter->var) >> 1);
-	part->ttl = (rand() % (emitter->maxLife - emitter->minLife)) + emitter->minLife + emitter->source.ttl; //flame intensity dies down with emitter TTL
+	part->x = emitter->source.x + random8(emitter->var)	- (emitter->var >> 1);
+	part->y = emitter->source.y + random8(emitter->var)	- (emitter->var >> 1);
+	part->vx = emitter->vx + random8(emitter->var)	- (emitter->var >> 1);
+	part->vy = emitter->vy + random8(emitter->var)	- (emitter->var >> 1);
+	part->ttl = (uint8_t)((rand() % (emitter->maxLife - emitter->minLife)) + emitter->minLife + emitter->source.ttl); //flame intensity dies down with emitter TTL
 	part->hue = emitter->source.hue;
 }
 
 //fountain style emitter
 void Emitter_Fountain_emit(PSpointsource *emitter, PSparticle *part) {
-	part->x = emitter->source.x + (rand() % emitter->var)
-			- ((emitter->var) >> 1);
-	part->y = emitter->source.y + (rand() % emitter->var)
-			- ((emitter->var) >> 1);
-	part->vx = emitter->vx + (rand() % emitter->var) - ((emitter->var) >> 1);
-	part->vy = emitter->vy + (rand() % emitter->var) - ((emitter->var) >> 1);
+	part->x = emitter->source.x + random8(emitter->var)	- (emitter->var >> 1);
+	part->y = emitter->source.y + random8(emitter->var)	- (emitter->var >> 1);
+	part->vx = emitter->vx + random8(emitter->var)	- (emitter->var >> 1);
+	part->vy = emitter->vy + random8(emitter->var)	- (emitter->var >> 1);
 	part->ttl = (rand() % (emitter->maxLife - emitter->minLife)) + emitter->minLife;
 	part->hue = emitter->source.hue;
-//part->isAlive = 1;
 }
 
 void Particle_Move_update(PSparticle *part) //particle moves, decays and dies (age or out of matrix)
@@ -70,10 +67,10 @@ void Particle_Move_update(PSparticle *part) //particle moves, decays and dies (a
 
 		int16_t newX, newY;
 		//check if particle is out of bounds or dead
-		if ((part->y == 0) || (part->y >= PS_MAX_Y)) {
+		if ((part->y <= 0) || (part->y >= PS_MAX_Y)) {
 			part->ttl = 0;
 		}
-		if ((part->x == 0) || (part->x >= PS_MAX_X)) {
+		if ((part->x <= 0) || (part->x >= PS_MAX_X)) {
 			part->ttl = 0;
 		}
 		if (part->vx == 0 && part->vy == 0) {
@@ -115,10 +112,10 @@ void Particle_Bounce_update(PSparticle *part) //bounces a particle on the matrix
 		if ((part->vx == 0 && part->vy == 0)) { //stopped moving, make it die
 			part->ttl = 0;
 		} else {
-			if ((part->y == 0) || (part->y >= PS_MAX_Y)) { //reached an edge
+			if ((part->y <= 0) || (part->y >= PS_MAX_Y)) { //reached an edge
 				part->vy = -part->vy;
 			}
-			if ((part->x == 0) || (part->x >= PS_MAX_X)) { //reached an edge
+			if ((part->x <= 0) || (part->x >= PS_MAX_X)) { //reached an edge
 				part->vx = -part->vx;
 			}
 
@@ -134,7 +131,7 @@ void Particle_Bounce_update(PSparticle *part) //bounces a particle on the matrix
 
 
 
-void Particle_Gravity_update(PSparticle *part, bool wrapX) //particle moves, decays and dies (age or out of matrix), if wrapX is set, pixels leaving in x direction reappear on other side
+void Particle_Gravity_update(PSparticle *part, bool wrapX, bool bounceX, bool bounceY) //particle moves, decays and dies (age or out of matrix), if wrapX is set, pixels leaving in x direction reappear on other side
 {
 
 	//Matrix dimension
@@ -151,7 +148,7 @@ void Particle_Gravity_update(PSparticle *part, bool wrapX) //particle moves, dec
 		//age
 		part->ttl--;
 		//check if particle is out of bounds or died
-		if ((part->y < -PS_P_RADIUS) || (part->y >= PS_MAX_Y << 1)) { //if it moves more than 1 pixel below y=0, it will not come back
+		if ((part->y < -PS_P_RADIUS) || (part->y >= PS_MAX_Y << 1)) { //if it moves more than 1 pixel below y=0, it will not come back. also remove particles that too far above
 			part->ttl = 0;
 			return; //particle died, we are done
 		}
@@ -176,20 +173,34 @@ void Particle_Gravity_update(PSparticle *part, bool wrapX) //particle moves, dec
 		} else {
 			part->gravitycounterx--;
 		}
+
+		//check if we need to bounce this particle, invert its speed when reaching an edge
+		if(bounceX){
+			if ((part->x <= 0) || (part->x >= PS_MAX_X)) { //reached an edge
+			part->vx = -part->vx;
+			}
+		}
+		if(bounceY){
+			if ((part->y <= 0) || (part->y >= PS_MAX_Y)) { //reached an edge
+				part->vy = -part->vy;
+			}
+		}
+		
+
 		//apply velocity
 		newX = part->x + (int16_t) part->vx;
 		newY = part->y + (int16_t) part->vy;
 
 		//check if particle is outside of displayable matrix
 
-		//x direction, handles wraparound
+		//x direction, handles wraparound (bounce will overrule this as particles will not move out of frame)
 		if(wrapX)
 		{
 			newX = newX % (PS_MAX_X+1);
 			if (newX < 0) 
 				newX = PS_MAX_X-newX;			
 		}
-		else {
+		else {			
 			if (newX < 0 || newX > PS_MAX_X)
 				part->outofbounds = 1;
 			else
@@ -444,7 +455,7 @@ void PartMatrix_addHeat(uint8_t col, uint8_t row, uint16_t heat) {
 
 	CRGB currentcolor =  SEGMENT.getPixelColorXY(col, rows-row-1); //read current matrix color (flip y axis)
 	uint16_t newcolorvalue;
-	uint8_t colormode = SEGMENT.custom2>>5; //get color mode from slider (3bit value)
+	uint8_t colormode = map(SEGMENT.custom3, 0, 31, 0, 5); //get color mode from slider (3bit value)
 
 	//define how the particle TTL value (which is the heat given to the function) maps to heat, if lower, fire is more red, if higher, fire is brighter as bright flames travel higher and decay faster
 

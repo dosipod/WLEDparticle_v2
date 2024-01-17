@@ -316,7 +316,9 @@
 #define FX_MODE_2DAKEMI                186
 #define FX_MODE_PARTICLESPRAY          187
 #define FX_MODE_PARTICLEFIRE           188
-#define MODE_COUNT                     189
+#define FX_MODE_PARTICLEFIREWORKS      189
+#define FX_MODE_PARTICLEROTATINGSPRAY  190
+#define MODE_COUNT                     191
 
 typedef enum mapping1D2D {
   M12_Pixels = 0,
